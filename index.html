@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <title>Bill Summaries</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://pages-themes.github.io/minimal/assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+
+:root{
+  --bg:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+  --panel:#f8fafc;
+  --panel2:#ffffff;
+
+  --link:#1d4ed8;
+  --linkHover:#1e40af;
+
+  --shadow: 0 1px 2px rgba(15,23,42,.06), 0 10px 24px rgba(15,23,42,.08);
+  --radius: 12px;
+}
+
+body{
+  background: var(--bg);
+  color: var(--text);
+}
+
+a{ color: var(--link); text-decoration:none; }
+a:hover{ color: var(--linkHover); text-decoration:underline; }
+
+/* kill GitHub minimal’s two-column layout */
+.wrapper{
+  max-width: 1500px;
+  width: calc(100% - 40px);
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+header{ float:none !important; width:auto !important; position:relative !important; padding-right:0 !important; }
+section{ float:none !important; width:auto !important; margin-left:0 !important; }
+footer{ display:none !important; }
+
+h1{ font-size: 2rem; margin-bottom: 0.25rem; }
+h2{ margin-top: 1.25rem; }
+
+.small-muted{ color: var(--muted); }
+.pill{
+  display:inline-block;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* Filters */
+.filter-bar{
+  margin: 1rem 0 1.25rem 0;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.filter-row{ margin: 0.75rem 0; }
+.filter-bar label{ margin-right: 0.5rem; font-weight: 700; }
+
+.filter-bar select[multiple]{ min-width: 320px; min-height: 140px; }
+.filter-bar select:not([multiple]){ min-width: 360px; }
+
+.filter-bar input[type="search"]{
+  min-width: 420px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+}
+
+.filter-bar select{
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+}
+
+button{
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  cursor: pointer;
+}
+button:hover{ filter: brightness(0.98); }
+
+#exportXlsx{
+  border-color: var(--link);
+  background: var(--link);
+  color: #fff;
+}
+#exportXlsx:hover{ background: var(--linkHover); border-color: var(--linkHover); }
+
+#rowCounter{ margin-left: 0.75rem; color: var(--muted); }
+
+/* Collapsible filter groups */
+.filter-group{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+  background: var(--panel2);
+}
+.filter-group > summary{
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+  position: relative;
+  padding-right: 1.25em;
+}
+.filter-group > summary::-webkit-details-marker{ display:none; }
+.filter-group > summary::after{
+  content: "▸";
+  position: absolute;
+  right: 0.15em;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.75;
+}
+.filter-group[open] > summary::after{ content:"▾"; opacity: 0.9; }
+
+/* Table */
+.table-wrap{
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--panel2);
+}
+
+table{
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead th{
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 2;
+  border-bottom: 2px solid var(--border);
+  text-align: left;
+  padding: 0.6rem;
+}
+
+tbody td{
+  padding: 0.6rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:nth-child(even){ background: #fbfdff; }
+tbody tr:hover{ background: #f1f7ff; }
+
+tbody tr:last-child td{ border-bottom: none; }
+
+/* Collapsible summary cells */
+.cell-details{ display:block; }
+.cell-details > summary{
+  cursor: pointer;
+  list-style: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 9;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  position: relative;
+  padding-right: 1.25em;
+}
+.cell-details > summary::-webkit-details-marker{ display:none; }
+.cell-details > summary::after{
+  content: "▸";
+  position: absolute;
+  right: 0.15em;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.75;
+  font-size: 1.05em;
+}
+.cell-details[open] > summary::after{ content:"▾"; opacity: 0.9; }
+.cell-details[open] > summary .cell-preview{ display:none; }
+
+.cell-details[open] .cell-body{
+  position: static;
+  margin-top: 0.5rem;
+  max-height: 280px;
+  overflow: auto;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.cell-body pre{
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.95em;
+  line-height: 1.35;
+}
+
+/* Optional: give Summary more room than Additions */
+#summaryTable th:nth-child(7), #summaryTable td:nth-child(7){ width: 55%; }
+#summaryTable th:nth-child(8), #summaryTable td:nth-child(8){ width: 35%; }
+
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <h1>Bill Summaries</h1>
+    <p class="small-muted"><small>Generated 2025-12-23T15:02:30Z</small></p>
+  </header>
+
+  <section>
+    <h2>Overview (Filterable)</h2>
+
+    <div class="filter-bar">
+      <details class="filter-group" open>
+        <summary>Session filter</summary>
+        <div class="filter-body">
+          <div class="filter-row">
+            <label for="sessionFilter">Legislative session:</label>
+            <select id="sessionFilter">
+              <option value="">All sessions</option><option value="109-1">Legislature 109, Session 1 (2025)</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <details class="filter-group" open>
+        <summary>Agency filter</summary>
+        <div class="filter-body">
+          <div class="filter-row">
+            <label for="agencyFilter">Filter by agency (multi-select):</label>
+            <select id="agencyFilter" multiple>
+              <option value="Department of Agriculture">Department of Agriculture</option><option value="Department of Health and Human Services">Department of Health and Human Services</option><option value="Department of Labor">Department of Labor</option><option value="Department of Revenue">Department of Revenue</option>
+            </select>
+            <p class="small-muted"><small>Tip: Ctrl/Cmd+click to select multiple agencies.</small></p>
+          </div>
+        </div>
+      </details>
+
+      <details class="filter-group" open>
+        <summary>Status filter</summary>
+        <div class="filter-body">
+          <div class="filter-row">
+            <label for="statusFilter">Bill status:</label>
+            <select id="statusFilter" multiple size="8">
+              <option value="e and r engrossing">E and R Engrossing</option><option value="final reading">Final Reading</option><option value="__none__">No status</option>
+            </select>
+            <p class="small-muted"><small>Tip: Ctrl/Cmd+click to select multiple statuses.</small></p>
+          </div>
+        </div>
+      </details>
+
+      <div class="filter-row">
+        <label for="searchBox">Search (bill, status, filename, agencies, summaries):</label>
+        <input type="search" id="searchBox" placeholder="e.g., housing, broadband, grant, LB100, Final Reading" />
+      </div>
+
+      <button type="button" id="clearFilters">Clear filters</button>
+      <button type="button" id="exportXlsx">Export Excel</button>
+      <span><small id="rowCounter"></small></span>
+    </div>
+
+    <div class="table-wrap">
+      <table id="summaryTable">
+        <thead>
+          <tr>
+            <th>Bill ID</th>
+            <th>Status</th>
+            <th>Session</th>
+            <th>Filename</th>
+            <th>Source Files</th>
+            <th>Matched Agencies</th>
+            <th>Bill Summary</th>
+            <th>Additions Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-session="109-1" data-agencies="" data-status="e and r engrossing"><td><a href="109-1/109-1-LB135_Intro.html">109-1-LB135_Intro</a></td><td><span class="pill">E and R Engrossing</span></td><td>Legislature 109, Session 1 (2025)</td><td>LB135_Intro_Copy.docx</td><td><a href="assets/109-1/docx/LB135_Intro_Copy.docx" download>DOCX</a> | <a href="assets/109-1/pdf/LB135_Intro_Copy.pdf" download>PDF</a></td><td></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> This bill standardizes election procedures for school-related bond, levy, budget and tax questions by requiring such elections to be held in compliance with subsection (3) of §32‑559. Key agency impacts and changes:  - Election commissioners and county clerks: designated to conduct school bond/levy elections (prepare ballots, early voting, ballot counting with two disinterested persons), receive clerk certifications by statutory deadlines, and ma…</span>  </summary>  <div class="cell-body"><pre>This bill standardizes election procedures for school-related bond, levy, budget and tax questions by requiring such elections to be held in compliance with subsection (3) of §32‑559. Key agency impacts and changes:
+
+- Election commissioners and county clerks: designated to conduct school bond/levy elections (prepare ballots, early voting, ballot counting with two disinterested persons), receive clerk certifications by statutory deadlines, and may bill school districts directly for special-election costs under §32‑1203. Political subdivisions remain liable for costs if they cancel (§32‑559).
+- School boards: must file orders/certifications and follow §32‑559 notice/timing requirements; may be billed for election costs.
+- Joint entities / joint public agencies and joint public agencies including school districts: prohibited from issuing bonds or pledging levy authority without elector approval under §32‑559; levy allocations must be reported to the Property Tax Administrator (§13‑2507).
+- Secretary of State: receives timely cancellation/withdrawal notices; Auditor of Public Accounts: receives records when voters approve exceeding growth at meetings (§13‑519).
+- County boards: retain role authorizing excess levies after voter approval (§77‑3444).
+
+Several existing sections are repealed; no direct appropriations are made.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> Adds procedures for school-district ballot measures and clarifies roles for school boards, election commissioners, county clerks, receiving boards and multi‑county election coordination. Key points: school bond/levy questions must comply with §32‑559; school boards must file ballot orders by specifi…</span>  </summary>  <div class="cell-body"><pre>Adds procedures for school-district ballot measures and clarifies roles for school boards, election commissioners, county clerks, receiving boards and multi‑county election coordination. Key points: school bond/levy questions must comply with §32‑559; school boards must file ballot orders by specified deadlines (March 1 for primaries, Sept. 1 for general, eighth Friday before a political‑subdivision general). Notice requirements: first‑class mail at least 30 days and publish a sample ballot 7–15 days before the election (not required to be given by the election commissioner/county clerk). Early‑voting ballots must be ready 21 days prior; ballots are counted by the election commissioner or county clerk with two disinterested appointees; multi‑county certification/ballot distribution rules and a five‑day voter list certification are added. The two disinterested counters must be paid at no less than the minimum hourly rate in §48‑1203. No other appropriations stated.</pre></div></details></td></tr>
+<tr data-session="109-1" data-agencies="Department of Labor" data-status="final reading"><td><a href="109-1/109-1-LB258_Final.html">109-1-LB258_Final</a></td><td><span class="pill">Final Reading</span></td><td>Legislature 109, Session 1 (2025)</td><td>LB258_Final_Copy.docx</td><td><a href="assets/109-1/docx/LB258_Final_Copy.docx" download>DOCX</a> | <a href="assets/109-1/pdf/LB258_Final_Copy.pdf" download>PDF</a></td><td>Department of Labor</td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> LB258 assigns two administrative duties involving the Department of Labor. It requires the Nebraska Department of Labor to calculate and publish the minimum wage rate no later than October 15 each year, beginning October 15, 2026, for the rate effective the following January 1. The bill also requires that any additional ninety-day training‑wage extension for on‑the‑job training be approved by the Commissioner of Labor. No changes to funding, appr…</span>  </summary>  <div class="cell-body"><pre>LB258 assigns two administrative duties involving the Department of Labor. It requires the Nebraska Department of Labor to calculate and publish the minimum wage rate no later than October 15 each year, beginning October 15, 2026, for the rate effective the following January 1. The bill also requires that any additional ninety-day training‑wage extension for on‑the‑job training be approved by the Commissioner of Labor. No changes to funding, appropriations, or budget allocations for the Department of Labor are included.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> Adds statutory youth and training wage rates and escalation schedules. Key points for the Department of Labor: - Youth minimum wage: employers may pay $13.50/hour for employees aged 14–15 (non‑emancipated). Beginning Jan 1, 2030, and every fifth year thereafter, that youth rate increases by 1.5% (ro…</span>  </summary>  <div class="cell-body"><pre>Adds statutory youth and training wage rates and escalation schedules. Key points for the Department of Labor:
+- Youth minimum wage: employers may pay $13.50/hour for employees aged 14–15 (non‑emancipated). Beginning Jan 1, 2030, and every fifth year thereafter, that youth rate increases by 1.5% (rounded to the nearest cent).
+- Training wage: $13.50/hour through Dec 31, 2026; beginning Jan 1, 2027, and each Jan 1 thereafter the training rate increases annually by 1.5% (rounded to the nearest cent).
+- No language in the added text authorizes or directs new funding, appropriations, or budget allocations to the Department of Labor. Any enforcement or implementation would rely on existing department resources.</pre></div></details></td></tr>
+<tr data-session="109-1" data-agencies="" data-status="final reading"><td><a href="109-1/109-1-LB302_Final.html">109-1-LB302_Final</a></td><td><span class="pill">Final Reading</span></td><td>Legislature 109, Session 1 (2025)</td><td>LB302_Final_Copy.docx</td><td><a href="assets/109-1/docx/LB302_Final_Copy.docx" download>DOCX</a> | <a href="assets/109-1/pdf/LB302_Final_Copy.pdf" download>PDF</a></td><td></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> LB302 eliminates observation of daylight saving time in Nebraska, making the State subject to Uniform Time Act standard time but exempt from 15 U.S.C. 260a(a) (time advancement) once Iowa, Kansas, South Dakota, and Wyoming adopt similar laws. The bill: updates election-time statute language for mountain/central zones (poll hours and ballot deadlines); voids the current daylight saving provision when the exemption becomes operative; and standardiz…</span>  </summary>  <div class="cell-body"><pre>LB302 eliminates observation of daylight saving time in Nebraska, making the State subject to Uniform Time Act standard time but exempt from 15 U.S.C. 260a(a) (time advancement) once Iowa, Kansas, South Dakota, and Wyoming adopt similar laws. The bill: updates election-time statute language for mountain/central zones (poll hours and ballot deadlines); voids the current daylight saving provision when the exemption becomes operative; and standardizes end-of-year time references for state personnel leave accounts to 11:59 p.m. central time on December 31. Agencies/departments referenced: Secretary of State/election judges and clerks (election administration), Governor (authority to extend leave), Legislature/Legislative Council and its Executive Board (leave discretion and crediting legislative service), Director of Personnel (rulemaking), Public Employees Retirement Board (treatment of cash payments for forfeited leave). No funding or appropriation changes.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> Adds a provision making Nebraska’s standard time the Uniform Time Act time in both its central and mountain zones but declares the State shall not observe daylight saving time and will be exempt from 15 U.S.C. 260a(a) (the federal provision authorizing clock advancement). The subsection only takes e…</span>  </summary>  <div class="cell-body"><pre>Adds a provision making Nebraska’s standard time the Uniform Time Act time in both its central and mountain zones but declares the State shall not observe daylight saving time and will be exempt from 15 U.S.C. 260a(a) (the federal provision authorizing clock advancement). The subsection only takes effect on January 1 after Iowa, Kansas, South Dakota, and Wyoming each adopt similar laws. The section is rendered null and void once subsection (2) of §49-1301 becomes operative. No state agencies or departments are named, and no funding, appropriations, or budget allocations are included.</pre></div></details></td></tr>
+<tr data-session="109-1" data-agencies="Department of Agriculture|Department of Health and Human Services|Department of Revenue" data-status="final reading"><td><a href="109-1/109-1-LB316_Final.html">109-1-LB316_Final</a></td><td><span class="pill">Final Reading</span></td><td>Legislature 109, Session 1 (2025)</td><td>LB316_Final_Copy.docx</td><td><a href="assets/109-1/docx/LB316_Final_Copy.docx" download>DOCX</a> | <a href="assets/109-1/pdf/LB316_Final_Copy.pdf" download>PDF</a></td><td>Department of Agriculture, Department of Health and Human Services, Department of Revenue</td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> - The bill defines USDA as the United States Department of Agriculture and references USDA licensing: &quot;USDA-licensed hemp producer&quot; and producers&#x27; &quot;USDA or state program license application&quot; for transport/registered-site provisions.  - It designates &quot;Department&quot; in the Uniform Controlled Substances Act to mean the Department of Health and Human Services and retains references to the Secretary of Health and Human Services (e.g., approvals relevant…</span>  </summary>  <div class="cell-body"><pre>- The bill defines USDA as the United States Department of Agriculture and references USDA licensing: &quot;USDA-licensed hemp producer&quot; and producers&#x27; &quot;USDA or state program license application&quot; for transport/registered-site provisions.
+
+- It designates &quot;Department&quot; in the Uniform Controlled Substances Act to mean the Department of Health and Human Services and retains references to the Secretary of Health and Human Services (e.g., approvals relevant to drug/product exclusions).
+
+- The Department of Revenue is charged with administering a new excise tax: a 10% tax on retail sales of cannabidiol products effective January 1, 2026. Retail sellers must keep electronic sales records as prescribed by the department, file monthly returns by the 20th, remit tax payments (department may require electronic filing/payment), and the department must remit collections monthly to the State Treasurer for credit to the Property Tax Credit Cash Fund.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> - Department of Revenue: New excise tax on retail cannabidiol products (10% of retail price) effective January 1, 2026. DOR must prescribe recordkeeping, forms, may require electronic filing and EFT payments, collect the tax, and remit receipts monthly to the State Treasurer for credit to the Proper…</span>  </summary>  <div class="cell-body"><pre>- Department of Revenue: New excise tax on retail cannabidiol products (10% of retail price) effective January 1, 2026. DOR must prescribe recordkeeping, forms, may require electronic filing and EFT payments, collect the tax, and remit receipts monthly to the State Treasurer for credit to the Property Tax Credit Cash Fund. Retail sellers must keep electronic sales records and file monthly returns (due by the 20th) and remit tax.  
+- Department of Agriculture: Additions refine hemp/cannabidiol definitions and allow federally compliant hemp interstate transport; no agency-specific duties or budget/appropriation changes are specified.  
+- Department of Health and Human Services: No changes or funding/appropriation actions appear in the added text.</pre></div></details></td></tr>
+<tr data-session="109-1" data-agencies="" data-status="final reading"><td><a href="109-1/109-1-LB34_Final.html">109-1-LB34_Final</a></td><td><span class="pill">Final Reading</span></td><td>Legislature 109, Session 1 (2025)</td><td>LB34_Final_Copy.docx</td><td><a href="assets/109-1/docx/LB34_Final_Copy.docx" download>DOCX</a> | <a href="assets/109-1/pdf/LB34_Final_Copy.pdf" download>PDF</a></td><td></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> LB34 updates Nebraska time law and makes related administrative clarifications. Key agency references and changes:  - Federal: Subsection tying a single, year‑round state standard time (Central UTC−5; Mountain UTC−6) to authorization by the U.S. Secretary of Transportation and coordination with U.S. Secretaries of Commerce and the Navy; operative only after three adjacent states adopt similar laws. - Secretary of State/election administration: cl…</span>  </summary>  <div class="cell-body"><pre>LB34 updates Nebraska time law and makes related administrative clarifications. Key agency references and changes:
+
+- Federal: Subsection tying a single, year‑round state standard time (Central UTC−5; Mountain UTC−6) to authorization by the U.S. Secretary of Transportation and coordination with U.S. Secretaries of Commerce and the Navy; operative only after three adjacent states adopt similar laws.
+- Secretary of State/election administration: clarifies polling and ballot receipt deadlines by Central vs. Mountain time (no funding changes).
+- State personnel administration: establishes sick‑ and vacation‑leave accounting cutoffs as 11:59 p.m. Central on Dec. 31; assigns the Director of Personnel rulemaking authority; gives employing agencies responsibility to offer use of leave or pay forfeited leave (cash counted as compensation only for defined contribution/cash balance plans administered by the Public Employees Retirement Board).
+- Executive authority: Governor (and Legislative Executive Board for Legislature employees) may extend annual‑leave limits in exceptional cases.
+
+No appropriations, funding, or budget allocations are included. Original sections are repealed.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> Adds a state standard-time rule: Nebraska’s central zone = UTC−5 and mountain zone = UTC−6. Defines &quot;Coordinated Universal Time&quot; as the scale maintained by the General Conference on Weights and Measures and interpreted/modified for the U.S. by the U.S. Secretary of Commerce in coordination with the…</span>  </summary>  <div class="cell-body"><pre>Adds a state standard-time rule: Nebraska’s central zone = UTC−5 and mountain zone = UTC−6. Defines &quot;Coordinated Universal Time&quot; as the scale maintained by the General Conference on Weights and Measures and interpreted/modified for the U.S. by the U.S. Secretary of Commerce in coordination with the U.S. Secretary of the Navy. Makes the provision operative on the first Sunday in November after (1) it is authorized by U.S. law or an order of the U.S. Secretary of Transportation (or no longer conflicts with such law/order) and (2) three adjacent states adopt a single year‑round standard time. It also notes the section becomes null and void if subsection (2) of §49‑1301 becomes operative. No agencies are allocated funding and there are no appropriations or budget changes.</pre></div></details></td></tr>
+<tr data-session="" data-agencies="" data-status="__none__"><td><a href="LB319_Intro_Copy.docx.html">LB319_Intro_Copy.docx</a></td><td><em>—</em></td><td>Unknown session</td><td></td><td><em>—</em></td><td></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Summary:</strong>    <span class="cell-preview"> Legislative Bill 319 delegates several responsibilities to the Department of Health and Human Services (DHHS) under the Supplemental Nutrition Assistance Program (SNAP). The Department is tasked with maximizing federal funding to minimize the use of state General Funds for SNAP and is required to employ necessary personnel to explore available federal options for Nebraska.  Additional provisions include the development of a state outreach plan co…</span>  </summary>  <div class="cell-body"><pre>Legislative Bill 319 delegates several responsibilities to the Department of Health and Human Services (DHHS) under the Supplemental Nutrition Assistance Program (SNAP). The Department is tasked with maximizing federal funding to minimize the use of state General Funds for SNAP and is required to employ necessary personnel to explore available federal options for Nebraska.
+
+Additional provisions include the development of a state outreach plan conforming to the Food and Nutrition Service&#x27;s criteria, which is part of the United States Department of Agriculture. DHHS may seek gifts, grants, or donations to fund the outreach initiative, which must be submitted to the Food and Nutrition Service for approval. If approved, it may secure federal matching funds, aiming to supplement state funds for increased caseloads due to the outreach plan implementation.
+
+The bill explicitly prohibits the use of General Funds by the Department of Labor for any action regarding a SNAP benefit partnership program, focused on encouraging higher employment among recipients. This program requires no state General Funds but may act with federal or other non-state funding. 
+
+Lastly, the DHHS is mandated to provide annual reports detailing the efficiencies and costs of these implementations to the Health and Human Services Committee of the Legislature.</pre></div></details></td><td><details class="cell-details">  <summary>    <strong class="cell-label">Additions:</strong>    <span class="cell-preview"> The legislative text modifies eligibility criteria for the Supplemental Nutrition Assistance Program (SNAP) related to individuals convicted of felonies involving controlled substances. According to the new provisions under 21 U.S.C. 862, individuals convicted of such felonies will now be eligible f…</span>  </summary>  <div class="cell-body"><pre>The legislative text modifies eligibility criteria for the Supplemental Nutrition Assistance Program (SNAP) related to individuals convicted of felonies involving controlled substances. According to the new provisions under 21 U.S.C. 862, individuals convicted of such felonies will now be eligible for SNAP benefits only if they have either completed their sentence or are currently serving parole, probation, or post-release supervision. This change pertains to policies administered by the Department of Agriculture, which oversees SNAP. The amendment does not include any direct changes to funding, appropriations, or budget allocations within the specified departments.</pre></div></details></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(function() {
+  var statusSelect = document.getElementById('statusFilter');
+  var agencySelect = document.getElementById('agencyFilter');
+  var sessionSelect = document.getElementById('sessionFilter');
+  var searchInput = document.getElementById('searchBox');
+  var clearBtn = document.getElementById('clearFilters');
+  var table = document.getElementById('summaryTable');
+  if (!agencySelect || !sessionSelect || !statusSelect || !table) return;
+
+  var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+  var rowCounter = document.getElementById('rowCounter');
+  var totalRows = rows.length;
+
+  var rowData = rows.map(function(row) {
+    return {
+      row: row,
+      text: (row.textContent || '').toLowerCase()
+    };
+  });
+
+  function getSelectedValues(sel) {
+    return Array.prototype.filter.call(sel.options, function(opt) {
+      return opt.selected;
+    }).map(function(opt) {
+      return opt.value;
+    }).filter(Boolean);
+  }
+
+  function applyFilter() {
+    var selectedAgencies = getSelectedValues(agencySelect);
+    var selectedStatuses = getSelectedValues(statusSelect);
+    var selectedSession = sessionSelect.value || '';
+    var q = (searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+    var shown = 0;
+
+    rowData.forEach(function(item) {
+      var row = item.row;
+
+      var rowSession = row.getAttribute('data-session') || '';
+      var sessionMatch = !selectedSession || rowSession === selectedSession;
+
+      var rowStatus = row.getAttribute('data-status') || '__none__';
+      var statusMatch = (selectedStatuses.length === 0) || (selectedStatuses.indexOf(rowStatus) !== -1);
+
+      var agenciesMatch = true;
+      if (selectedAgencies.length > 0) {
+        var data = row.getAttribute('data-agencies') || '';
+        var agencies = data.split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+        agenciesMatch = selectedAgencies.some(function(sel) {
+          return agencies.indexOf(sel) !== -1;
+        });
+      }
+
+      var textMatch = !q || item.text.indexOf(q) !== -1;
+
+      var visible = (sessionMatch && statusMatch && agenciesMatch && textMatch);
+      row.style.display = visible ? '' : 'none';
+      if (visible) shown += 1;
+    });
+
+    if (rowCounter) {
+      rowCounter.textContent = shown + ' of ' + totalRows + ' rows';
+    }
+  }
+
+  agencySelect.addEventListener('change', applyFilter);
+  sessionSelect.addEventListener('change', applyFilter);
+  statusSelect.addEventListener('change', applyFilter);
+  if (searchInput) searchInput.addEventListener('input', applyFilter);
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      Array.prototype.forEach.call(agencySelect.options, function(opt) {
+        opt.selected = false;
+      });
+      Array.prototype.forEach.call(statusSelect.options, function(opt) {
+        opt.selected = false;
+      });
+      sessionSelect.value = '';
+      if (searchInput) searchInput.value = '';
+      applyFilter();
+    });
+  }
+
+  function sanitizeForExcel(value) {
+    var s = (value == null) ? '' : String(value);
+    if (/^[=+\-@]/.test(s)) return "'" + s;
+    return s;
+  }
+
+  function getCellValueForExport(cell) {
+    if (!cell) return '';
+    var pre = cell.querySelector('pre');
+    if (pre) return sanitizeForExcel((pre.textContent || '').trim());
+
+    var links = Array.prototype.slice.call(cell.querySelectorAll('a'));
+    if (links.length) {
+      var joined = links.map(function(a) {
+        var label = (a.textContent || '').trim();
+        var href = a.getAttribute('href') || '';
+        return (label ? (label + ': ') : '') + href;
+      }).join(' | ');
+      return sanitizeForExcel(joined);
+    }
+
+    return sanitizeForExcel((cell.textContent || '').trim());
+  }
+
+  function exportVisibleTableToXlsx() {
+    if (typeof XLSX === 'undefined') {
+      alert('Excel export library (XLSX) not loaded. If you are offline or CDN is blocked, host xlsx.full.min.js locally.');
+      return;
+    }
+
+    var visibleRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'))
+      .filter(function(r) { return r.style.display !== 'none'; });
+
+    var headers = Array.prototype.slice.call(table.querySelectorAll('thead th'))
+      .map(function(th) { return (th.textContent || '').trim(); });
+
+    var aoa = [];
+    aoa.push(headers);
+
+    visibleRows.forEach(function(row) {
+      var cells = Array.prototype.slice.call(row.querySelectorAll('td'));
+      aoa.push(cells.map(getCellValueForExport));
+    });
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bill Summaries');
+    XLSX.writeFile(wb, 'bill_summaries.xlsx', { compression: true });
+  }
+
+  var exportBtn = document.getElementById('exportXlsx');
+  if (exportBtn) exportBtn.addEventListener('click', exportVisibleTableToXlsx);
+
+  applyFilter();
+})();
+</script>
+</body>
+</html>
